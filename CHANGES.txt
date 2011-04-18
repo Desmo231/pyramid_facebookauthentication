@@ -1,0 +1,7 @@
+``pyramid_facebookauthentication`` Changelog
+=========================
+
+0.0 (2011-04-19)
+----------------
+
+- Initial public version.
