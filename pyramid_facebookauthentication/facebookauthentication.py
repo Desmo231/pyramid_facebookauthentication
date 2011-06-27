@@ -1,4 +1,5 @@
-import facebook
+import base64, hashlib, hmac, json
+
 from zope.interface import implements
 from pyramid.interfaces import IAuthenticationPolicy
 from pyramid.authentication import CallbackAuthenticationPolicy
@@ -39,9 +40,9 @@ class FacebookAuthHelper(object):
         identity = {'uid':None, 'access_token':None}
         sr = self._signed_request(request)
         if sr: # Get the user from a signed_request
-            if not facebook.check_signed_request(sr, self.app_secret):
+            if not self.check_signed_request(sr):
                 return None
-            user = facebook.get_user_from_signed_request(sr)
+            user = self.get_user_from_signed_request(sr)
             if not user:
                 return None
             identity['uid'] = user.get('user_id')
@@ -51,7 +52,7 @@ class FacebookAuthHelper(object):
                 add_global_response_headers(request, self.remember(request, identity['uid'], sr))
             
         else: # Try to get the user from fb cookie.
-            user = facebook.get_user_from_cookie(
+            user = self.get_user_from_cookie(
                 request.cookies,
                 self.app_id,
                 self.app_secret)
@@ -81,4 +82,39 @@ class FacebookAuthHelper(object):
 
     def forget(self, request):
         return []
+
+    """ Borrowed from https://github.com/facebook/python-sdk
+    """
+
+    def get_user_from_cookie(self, cookies):
+        cookie = cookies.get("fbs_" + self.app_id, "")
+        if not cookie: return None
+        args = dict((k, v[-1]) for k, v in cgi.parse_qs(cookie.strip('"')).items())
+        payload = "".join(k + "=" + args[k] for k in sorted(args.keys())
+                      if k != "sig")
+        sig = hashlib.md5(payload + app_secret).hexdigest()
+        expires = int(args["expires"])
+        if sig == args.get("sig") and (expires == 0 or time.time() < expires):
+            return args
+        else:
+            return None
+
+    def get_user_from_signed_request(self, signed_request):
+        """Parses the signed_request parameter from Facebook canvas applications.
+        """
+        sig, payload = signed_request.split(u'.', 1)
+        return json.loads(self.base64_url_decode(payload))
+
+    def check_signed_request(self, signed_request):
+        sig, payload = signed_request.split(u'.', 1)
+        sig = self.base64_url_decode(sig)
+        expected_sig = hmac.new(
+            self.app_secret, msg=payload, digestmod=hashlib.sha256).digest()
+        return sig == expected_sig
+
+
+    def base64_url_decode(self, data):
+        data = data.encode(u'ascii')
+        data += '=' * (4 - (len(data) % 4))
+        return base64.urlsafe_b64decode(data)
 
