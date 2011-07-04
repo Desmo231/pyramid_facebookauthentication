@@ -1,4 +1,4 @@
-import base64, hashlib, hmac, json
+import base64, hashlib, hmac, json, urllib
 
 from zope.interface import implements
 from pyramid.interfaces import IAuthenticationPolicy
@@ -64,7 +64,7 @@ class FacebookAuthHelper(object):
         return identity
 
     def login_view(self, request):
-        return Response("<script type='text/javascript'>top.location.href = 'https://www.facebook.com/dialog/oauth?client_id={0}&redirect_uri={1}&type=user_agent&display=page&scope={2}';</script>".format(self.app_id, self.app_url, self.app_permissions))
+        return Response("<script type='text/javascript'>top.location.href = 'https://www.facebook.com/dialog/oauth?client_id={0}&redirect_uri={1}&type=user_agent&display=page&scope={2}';</script>".format(self.app_id, urllib.urlencode(request.url), self.app_permissions))
 
     def _signed_request(self, request):
         if 'signed_request' in request.params:
@@ -99,6 +99,8 @@ class FacebookAuthHelper(object):
         else:
             return None
 
+    """ https://github.com/facebook/runwithfriends/blob/master/main.py
+    """
     def get_user_from_signed_request(self, signed_request):
         """Parses the signed_request parameter from Facebook canvas applications.
         """
