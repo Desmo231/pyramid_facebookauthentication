@@ -92,7 +92,7 @@ class FacebookAuthHelper(object):
         args = dict((k, v[-1]) for k, v in cgi.parse_qs(cookie.strip('"')).items())
         payload = "".join(k + "=" + args[k] for k in sorted(args.keys())
                       if k != "sig")
-        sig = hashlib.md5(payload + app_secret).hexdigest()
+        sig = hashlib.md5(payload + self.app_secret).hexdigest()
         expires = int(args["expires"])
         if sig == args.get("sig") and (expires == 0 or time.time() < expires):
             return args
