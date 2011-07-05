@@ -11,7 +11,7 @@ from pyramid.response import Response
 class FacebookAuthenticationPolicy(CallbackAuthenticationPolicy):
     """ An object representing Facebook Pyramid authentication policy. """
     implements(IAuthenticationPolicy)
-    def __init__(self, app_id, app_secret, app_url, app_permissions=None, callback=None):
+    def __init__(self, app_id, app_secret, app_url, app_permissions='user_about_me', callback=None):
         self.fbuser = FacebookAuthHelper(app_id, app_secret, app_url, app_permissions)
         self.callback = callback
 
@@ -54,10 +54,7 @@ class FacebookAuthHelper(object):
                 add_global_response_headers(request, self.remember(request, identity['uid'], sr))
             
         else: # Try to get the user from fb cookie.
-            user = self.get_user_from_cookie(
-                request.cookies,
-                self.app_id,
-                self.app_secret)
+            user = self.get_user_from_cookie(request.cookies)
             if not user:
                 return None
             identity['uid'] = user.get('uid')
@@ -66,7 +63,7 @@ class FacebookAuthHelper(object):
         return identity
 
     def login_view(self, request):
-        return Response("<script type='text/javascript'>top.location.href = 'https://www.facebook.com/dialog/oauth?client_id={0}&redirect_uri={1}&type=user_agent&display=page&scope={2}';</script>".format(self.app_id, urllib.urlencode(request.url), self.app_permissions))
+        return Response("<script type='text/javascript'>top.location.href = 'https://www.facebook.com/dialog/oauth?client_id={0}&redirect_uri={1}&type=user_agent&display=page&scope={2}';</script>".format(self.app_id, urllib.quote(self.app_url + request.path_info + '?' + request.query_string), self.app_permissions))
 
     def _signed_request(self, request):
         if 'signed_request' in request.params:
