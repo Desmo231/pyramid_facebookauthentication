@@ -75,6 +75,7 @@ class FacebookAuthHelper(object):
     def remember(self, request, uid, signed_request=None):
         if not signed_request: return []
         return [
+            ('P3P', 'CP="HONK"'),
             ('Set-Cookie', 'fb_uid="{0}"; Path=/'.format(uid)),
             ('Set-Cookie', 'signed_request="{0}"; Path=/'.format(signed_request))
             ]
