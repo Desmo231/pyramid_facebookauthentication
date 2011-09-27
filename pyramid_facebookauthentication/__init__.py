@@ -6,7 +6,7 @@ from zope.interface import implements
 from pyramid.interfaces import IAuthenticationPolicy
 from pyramid.authentication import CallbackAuthenticationPolicy
 from pyramid.request import add_global_response_headers
-from pyramid.response import Response 
+from pyramid.response import Response
 
 class FacebookAuthenticationPolicy(CallbackAuthenticationPolicy):
     """ An object representing Facebook Pyramid authentication policy. """
@@ -48,11 +48,11 @@ class FacebookAuthHelper(object):
             if not user:
                 return None
             identity['uid'] = user.get('user_id')
-            identity['access_token'] = user.get('oath_token')
+            identity['access_token'] = user.get('oauth_token')
             identity['signed_request'] = sr
             if 'signed_request' not in request.cookies or request.cookies.get('signed_request') != sr:
                 add_global_response_headers(request, self.remember(request, identity['uid'], sr))
-            
+
         else: # Try to get the user from fb cookie.
             user = self.get_user_from_cookie(request.cookies)
             if not user:
@@ -70,7 +70,7 @@ class FacebookAuthHelper(object):
             return request.params.get('signed_request')
         if 'signed_request' in request.cookies:
             return request.cookies.get('signed_request')
-      
+
 
     def remember(self, request, uid, signed_request=None):
         if not signed_request: return []
