@@ -63,7 +63,7 @@ class FacebookAuthHelper(object):
         else:
             # look for access_token
             access_token = self._key_from_request(request, 'access_token')
-            identity = self.get_user_via_access_token(access_token)
+            identity = self.get_identity_via_access_token(access_token)
             if 'signed_request' in identity:
                 add_global_response_headers(request, self.remember(request, identity['uid'], identity['signed_request']))
 
