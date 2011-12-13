@@ -1,6 +1,6 @@
 # package
 
-import base64, hashlib, hmac, json, urllib
+import base64, hashlib, hmac, json, urllib, urlparse, time
 
 from zope.interface import implements
 from pyramid.interfaces import IAuthenticationPolicy
@@ -40,7 +40,7 @@ class FacebookAuthHelper(object):
 
     def identify(self, request):
         identity = {'uid':None, 'access_token':None}
-        sr = self._signed_request(request)
+        sr = self._key_from_request(request, 'signed_request')
         if sr: # Get the user from a signed_request
             if not self.check_signed_request(sr):
                 return None
@@ -53,24 +53,31 @@ class FacebookAuthHelper(object):
             if 'signed_request' not in request.cookies or request.cookies.get('signed_request') != sr:
                 add_global_response_headers(request, self.remember(request, identity['uid'], sr))
 
-        else: # Try to get the user from fb cookie.
+        elif "fbs_" + self.app_id in request.cookies:
+            # Try to get the user from fb cookie.
             user = self.get_user_from_cookie(request.cookies)
             if not user:
                 return None
             identity['uid'] = user.get('uid')
             identity['access_token'] = user.get('access_token')
+        else:
+            # look for access_token
+            access_token = self._key_from_request(request, 'access_token')
+            identity = self.get_user_via_access_token(access_token)
+            if 'signed_request' in identity:
+                add_global_response_headers(request, self.remember(request, identity['uid'], identity['signed_request']))
 
         return identity
 
     def login_view(self, request):
         return Response("<script type='text/javascript'>top.location.href = 'https://www.facebook.com/dialog/oauth?client_id={0}&redirect_uri={1}&type=user_agent&display=page&scope={2}';</script>".format(self.app_id, urllib.quote(self.app_url + request.path_info + '?' + request.query_string), self.app_permissions))
 
-    def _signed_request(self, request):
-        if 'signed_request' in request.params:
-            return request.params.get('signed_request')
-        if 'signed_request' in request.cookies:
-            return request.cookies.get('signed_request')
-
+    def _key_from_request(self, request, key):
+        if key in request.params:
+            return request.params.get(key)
+        if key in request.cookies:
+            return request.cookies.get(key)
+        return None
 
     def remember(self, request, uid, signed_request=None):
         if not signed_request: return []
@@ -88,7 +95,7 @@ class FacebookAuthHelper(object):
     def get_user_from_cookie(self, cookies):
         cookie = cookies.get("fbs_" + self.app_id, "")
         if not cookie: return None
-        args = dict((k, v[-1]) for k, v in cgi.parse_qs(cookie.strip('"')).items())
+        args = dict((k, v[-1]) for k, v in urlparse.parse_qs(cookie.strip('"')).items())
         payload = "".join(k + "=" + args[k] for k in sorted(args.keys())
                       if k != "sig")
         sig = hashlib.md5(payload + self.app_secret).hexdigest()
@@ -101,7 +108,7 @@ class FacebookAuthHelper(object):
     """ https://github.com/facebook/runwithfriends/blob/master/main.py
     """
     def get_user_from_signed_request(self, signed_request):
-        """Parses the signed_request parameter from Facebook canvas applications.
+        """Parse the signed_request parameter from Facebook canvas applications.
         """
         sig, payload = signed_request.split(u'.', 1)
         return json.loads(self.base64_url_decode(payload))
@@ -109,13 +116,38 @@ class FacebookAuthHelper(object):
     def check_signed_request(self, signed_request):
         sig, payload = signed_request.split(u'.', 1)
         sig = self.base64_url_decode(sig)
-        expected_sig = hmac.new(
-            self.app_secret, msg=payload, digestmod=hashlib.sha256).digest()
-        return sig == expected_sig
+        return sig == self.sign(payload)
 
+    def get_identity_via_access_token(self, access_token):
+        identity = {'uid':None, 'access_token':None}
+        if not access_token: return identity
+        try:
+            userdat = json.load(urllib.urlopen('https://graph.facebook.com/me?access_token='+access_token))
+        except:
+            return identity
+        user = dict([(key, userdat.get(key)) for key in ['username', 'first_name', 'last_name', 'verified', 'name', 'locale', 'updated_time', 'languages', 'link', 'location', 'gender', 'timezone', 'id']])
+        user['signed_request'] = self.make_signed_request(access_token,user)
+        user['access_token'] = access_token
+        user['uid'] = user.get('id')
+        return user
+    
+    def sign(self, payload):
+        return hmac.new(
+            self.app_secret, msg=payload, digestmod=hashlib.sha256).digest()
 
     def base64_url_decode(self, data):
         data = data.encode(u'ascii')
         data += '=' * (4 - (len(data) % 4))
         return base64.urlsafe_b64decode(data)
+
+    def make_signed_request(self, access_token, user):
+        # {"country":"us","locale":"en_US","age":{"min":21}},
+        payload = {"algorithm":"HMAC-SHA256", "expires":0,
+          "issued_at":int(time.time()),
+          "oauth_token":access_token,
+          "user_id":user['id'],
+          "user": user}
+        data = base64.urlsafe_b64encode(json.dumps(payload))
+        sig = base64.urlsafe_b64encode(self.sign(data))
+        return sig + "." + data
 
