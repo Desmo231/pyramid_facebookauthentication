@@ -27,8 +27,8 @@ class FacebookAuthenticationPolicy(CallbackAuthenticationPolicy):
     def forget(self, request):
         return self.fbuser.forget(request)
 
-    def login_view(self, context, request, redir_url=None):
-        return self.fbuser.login_view(request, redir_url)
+    def login_view(self, context, request, redir_url=None, scope=None):
+        return self.fbuser.login_view(request, redir_url, scope)
 
 class FacebookAuthHelper(object):
 
@@ -69,9 +69,11 @@ class FacebookAuthHelper(object):
 
         return identity
 
-    def login_view(self, request, redir_url):
+    def login_view(self, request, redir_url, scope):
         url = redir_url or self.app_url
-        return Response("<script type='text/javascript'>top.location.href = 'https://www.facebook.com/dialog/oauth?client_id={0}&redirect_uri={1}&type=user_agent&display=page&scope={2}';</script>".format(self.app_id, urllib.quote(url + request.path_info + '?' + request.query_string), self.app_permissions))
+        if not scope:
+            scope = self.app_permissions
+        return Response("<script type='text/javascript'>top.location.href = 'https://www.facebook.com/dialog/oauth?client_id={0}&redirect_uri={1}&type=user_agent&display=page&scope={2}';</script>".format(self.app_id, urllib.quote(url + request.path_info + '?' + request.query_string), scope))
 
     def _key_from_request(self, request, key):
         if key in request.params:
