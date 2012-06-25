@@ -29,6 +29,9 @@ class FacebookAuthenticationPolicy(CallbackAuthenticationPolicy):
 
     def login_view(self, context, request, redir_url=None, scope=None):
         return self.fbuser.login_view(request, redir_url, scope)
+    
+    def oauth_url(self, request, redir_url=None, scope=None):
+        return self.fbuser.oauth_url(request, redir_url, scope)
 
 class FacebookAuthHelper(object):
 
@@ -70,10 +73,29 @@ class FacebookAuthHelper(object):
         return identity
 
     def login_view(self, request, redir_url, scope):
+        oauth_url = self.oauth_url(request, redir_url, scope)
+        return Response("<script type='text/javascript'>top.location.href = '{0}';</script>".format(oauth_url))
+    
+    def oauth_url(self, request, redir_url, scope):
+        scheme = 'https'
+        netloc = 'www.facebook.com'
+        path = '/dialog/oauth'
+        
         url = redir_url or self.app_url
         if not scope:
             scope = self.app_permissions
-        return Response("<script type='text/javascript'>top.location.href = 'https://www.facebook.com/dialog/oauth?client_id={0}&redirect_uri={1}&type=user_agent&display=page&scope={2}';</script>".format(self.app_id, urllib.quote(url + request.path_info + '?' + request.query_string), scope))
+        url = url + request.path_info + '?' + request.query_string
+        
+        query = [
+            ("client_id", self.app_id),
+            ("redirect_uri",url),
+            ("type", "user_agent"),
+            ("display", "page"),
+            ("scope", scope)
+        ]
+        query_str = urllib.urlencode(query)
+        url = urlparse.urlunsplit((scheme, netloc, path, query_str, ''))
+        return url
 
     def _key_from_request(self, request, key):
         if key in request.params:
