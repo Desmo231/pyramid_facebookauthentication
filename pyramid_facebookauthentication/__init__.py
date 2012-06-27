@@ -30,8 +30,8 @@ class FacebookAuthenticationPolicy(CallbackAuthenticationPolicy):
     def login_view(self, context, request, redir_url=None, scope=None):
         return self.fbuser.login_view(request, redir_url, scope)
     
-    def oauth_url(self, request, redir_url=None, scope=None, display=None):
-        return self.fbuser.oauth_url(request, redir_url, scope, display)
+    def oauth_url(self, request, redir_url=None, scope=None, display=None, response_type=None):
+        return self.fbuser.oauth_url(request, redir_url, scope, display, response_type)
 
 class FacebookAuthHelper(object):
 
@@ -76,7 +76,7 @@ class FacebookAuthHelper(object):
         oauth_url = self.oauth_url(request, redir_url, scope)
         return Response("<script type='text/javascript'>top.location.href = '{0}';</script>".format(oauth_url))
     
-    def oauth_url(self, request, redir_url, scope, display=None):
+    def oauth_url(self, request, redir_url, scope, display=None, response_type=None):
         """
             Creates an oauth_url per oauth_dialog guidelines:
             http://developers.facebook.com/docs/reference/dialogs/oauth/
@@ -95,6 +95,9 @@ class FacebookAuthHelper(object):
         # display defaults to page if you don't send it
         if display:
             query.append(("display",display))
+        
+        if response_type:
+            query.append(("response_type",response_type))
 
         # scope is also optional, but we get it from app params
         if not scope:
