@@ -81,7 +81,7 @@ class FacebookAuthHelper(object):
             Creates an oauth_url per oauth_dialog guidelines:
             http://developers.facebook.com/docs/reference/dialogs/oauth/
         """
-        scheme = 'https'
+        scheme = request.scheme
         netloc = 'www.facebook.com'
         path = '/dialog/oauth/'
         query = [
