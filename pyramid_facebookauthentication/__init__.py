@@ -30,8 +30,8 @@ class FacebookAuthenticationPolicy(CallbackAuthenticationPolicy):
     def login_view(self, context, request, redir_url=None, scope=None):
         return self.fbuser.login_view(request, redir_url, scope)
     
-    def oauth_url(self, request, redir_url=None, scope=None):
-        return self.fbuser.oauth_url(request, redir_url, scope)
+    def oauth_url(self, request, redir_url=None, scope=None, display=None):
+        return self.fbuser.oauth_url(request, redir_url, scope, display)
 
 class FacebookAuthHelper(object):
 
@@ -76,23 +76,32 @@ class FacebookAuthHelper(object):
         oauth_url = self.oauth_url(request, redir_url, scope)
         return Response("<script type='text/javascript'>top.location.href = '{0}';</script>".format(oauth_url))
     
-    def oauth_url(self, request, redir_url, scope):
+    def oauth_url(self, request, redir_url, scope, display=None):
+        """
+            Creates an oauth_url per oauth_dialog guidelines:
+            http://developers.facebook.com/docs/reference/dialogs/oauth/
+        """
         scheme = 'https'
         netloc = 'www.facebook.com'
-        path = '/dialog/oauth'
-        
-        url = redir_url or self.app_url
-        if not scope:
-            scope = self.app_permissions
-        url = url + request.path_info + '?' + request.query_string
-        
+        path = '/dialog/oauth/'
         query = [
             ("client_id", self.app_id),
-            ("redirect_uri",url),
-            ("type", "user_agent"),
-            ("display", "page"),
-            ("scope", scope)
         ]
+        
+        url = redir_url or self.app_url
+        url = url + request.path_info + '?' + request.query_string    
+        query.append(("redirect_uri",url))
+                
+        # display defaults to page if you don't send it
+        if display:
+            query.append(("display",display))
+
+        # scope is also optional, but we get it from app params
+        if not scope:
+            scope = self.app_permissions
+        if scope:
+            query.append(("scope",scope))
+        
         query_str = urllib.urlencode(query)
         url = urlparse.urlunsplit((scheme, netloc, path, query_str, ''))
         return url
