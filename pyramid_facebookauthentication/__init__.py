@@ -68,7 +68,7 @@ class FacebookAuthHelper(object):
             if 'signed_request' in identity:
                 add_global_response_headers(request, self.remember(request, identity['uid'], identity['signed_request']))
 
-        if 'uid' not in identity:
+        if not identity.get('uid'):
             identity = self._get_identity_from_code(request)
         return identity
 
@@ -130,7 +130,7 @@ class FacebookAuthHelper(object):
         except:
             return None
 
-    def _get_identity_from_code(self):
+    def _get_identity_from_code(self, request):
         """Check for ?code=<code> param in
         url and exchange it for an access_token.
         Then get user from access_token.
@@ -141,7 +141,7 @@ class FacebookAuthHelper(object):
             params = {
                 "code": code,
                 "client_id": self.app_id,
-                "redir_uri": request.path_url,
+                "redirect_uri": request.path_url,
                 "client_secret": self.app_secret
             }
             response = self._make_graph_call("/oauth/access_token", params)
