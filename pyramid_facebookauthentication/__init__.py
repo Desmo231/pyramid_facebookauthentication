@@ -113,11 +113,17 @@ class FacebookAuthHelper(object):
     def get_user_from_signed_request(self, signed_request):
         """Parse the signed_request parameter from Facebook canvas applications.
         """
-        sig, payload = signed_request.split(u'.', 1)
+        try:
+            sig, payload = signed_request.split(u'.', 1)
+        except:
+            return None
         return json.loads(self.base64_url_decode(payload))
 
     def check_signed_request(self, signed_request):
-        sig, payload = signed_request.split(u'.', 1)
+        try:
+            sig, payload = signed_request.split(u'.', 1)
+        except:
+            return None
         sig = self.base64_url_decode(sig)
         return sig == self.sign(payload)
 
