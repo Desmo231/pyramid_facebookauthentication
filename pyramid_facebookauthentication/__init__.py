@@ -8,6 +8,7 @@ from pyramid.authentication import CallbackAuthenticationPolicy
 from pyramid.request import add_global_response_headers
 from pyramid.response import Response
 
+GRAPH_URL = "https://graph.facebook.com"
 class FacebookAuthenticationPolicy(CallbackAuthenticationPolicy):
     """ An object representing Facebook Pyramid authentication policy. """
     implements(IAuthenticationPolicy)
@@ -120,12 +121,18 @@ class FacebookAuthHelper(object):
         sig, payload = signed_request.split(u'.', 1)
         sig = self.base64_url_decode(sig)
         return sig == self.sign(payload)
+    def _make_graph_call(self, path, params={}):
+        try:
+            string_params = urllib.urlencode(params)
+            return json.load(urllib.urlopen(GRAPH_URL+path, string_params))
+        except:
+            return None
 
     def get_identity_via_access_token(self, access_token):
         identity = {'uid':None, 'access_token':None}
         if not access_token: return identity
         try:
-            userdat = json.load(urllib.urlopen('https://graph.facebook.com/me?access_token='+access_token))
+            userdat = self._make_graph_call("/me", {"access_token": access_token})
         except:
             return identity
         user = dict([(key, userdat.get(key)) for key in ['username', 'first_name', 'last_name', 'verified', 'name', 'locale', 'updated_time', 'languages', 'link', 'location', 'gender', 'timezone', 'id']])
