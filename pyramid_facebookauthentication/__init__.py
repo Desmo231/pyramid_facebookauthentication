@@ -3,16 +3,20 @@
 import base64, hashlib, hmac, json, urllib, urlparse, time
 
 from zope.interface import implements
-from pyramid.interfaces import IAuthenticationPolicy
+from pyramid.interfaces import IAuthenticationPolicy, IDebugLogger
 from pyramid.authentication import CallbackAuthenticationPolicy
 from pyramid.request import add_global_response_headers
 from pyramid.response import Response
+from pyramid.security import (
+    Authenticated,
+    Everyone,
+    )
 
 class FacebookAuthenticationPolicy(CallbackAuthenticationPolicy):
     """ An object representing Facebook Pyramid authentication policy. """
     implements(IAuthenticationPolicy)
     def __init__(self, app_id, app_secret, app_url, app_permissions='user_about_me', callback=None):
-        self.fbuser = FacebookAuthHelper(app_id, app_secret, app_url, app_permissions)
+        self.fbuser = FacebookAuthHelper(app_id, app_secret, app_url, app_permissions, callback)
         self.callback = callback
 
     def unauthenticated_userid(self, request):
@@ -27,16 +31,23 @@ class FacebookAuthenticationPolicy(CallbackAuthenticationPolicy):
     def forget(self, request):
         return self.fbuser.forget(request)
 
+    def effective_principals(self, request):
+        return self.fbuser.effective_principals(request)
+
     def login_view(self, context, request, redir_url=None, scope=None):
         return self.fbuser.login_view(request, redir_url, scope)
 
+
+
 class FacebookAuthHelper(object):
 
-    def __init__(self, app_id, app_secret, app_url, app_permissions='user_about_me'):
+    def __init__(self, app_id, app_secret, app_url, app_permissions='user_about_me', callback=None):
         self.app_id = app_id
         self.app_secret = app_secret
         self.app_url = app_url
         self.app_permissions = app_permissions
+        self.callback = callback
+        self.debug = False
 
     def identify(self, request):
         identity = {'uid':None, 'access_token':None}
@@ -93,6 +104,64 @@ class FacebookAuthHelper(object):
 
     def forget(self, request):
         return []
+
+    def effective_principals(self, request):
+        """ Copied straight out of pyramid 1.3.2 authorization.py. Only
+        change was to move user None check to after groups to allow for anonymous
+        users in a group """
+        effective_principals = [Everyone]
+        identity = self.identify(request)
+        userid = identity and identity['uid'] or None
+        debug = self.debug
+        if self.callback is None:
+            debug and self._log(
+                'groupfinder callback is None, so groups is []',
+                'effective_principals',
+                request)
+            groups = []
+        else:
+            groups = self.callback(userid, request)
+            debug and self._log(
+                'groupfinder callback returned %r as groups' % (groups,),
+                'effective_principals',
+                request)
+        if groups is None:  # is None!
+            debug and self._log(
+                'returning effective principals: %r' % (
+                    effective_principals,),
+                'effective_principals',
+                request
+                )
+            return effective_principals
+        effective_principals.extend(groups)
+
+        if userid is None:
+            debug and self._log(
+                'unauthenticated_userid returned %r; returning %r' % (
+                    userid, effective_principals),
+                'effective_principals',
+                request
+                )
+            return effective_principals
+
+        effective_principals.append(Authenticated)
+        effective_principals.append(userid)
+
+        debug and self._log(
+            'returning effective principals: %r' % (
+                effective_principals,),
+            'effective_principals',
+            request
+             )
+        return effective_principals
+
+    def _log(self, msg, methodname, request):
+        logger = request.registry.queryUtility(IDebugLogger)
+        if logger:
+            cls = self.__class__
+            classname = cls.__module__ + '.' + cls.__name__
+            methodname = classname + '.' + methodname
+            logger.debug(methodname + ': ' + msg)
 
     """ Borrowed from https://github.com/facebook/python-sdk
     """
@@ -159,7 +228,7 @@ class FacebookAuthHelper(object):
         user['access_token'] = access_token
         user['uid'] = user.get('id')
         return user
-    
+
     def sign(self, payload):
         return hmac.new(
             self.app_secret, msg=payload, digestmod=hashlib.sha256).digest()
