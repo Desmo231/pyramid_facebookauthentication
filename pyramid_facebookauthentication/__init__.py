@@ -67,6 +67,8 @@ class FacebookAuthHelper(object):
             if 'signed_request' in identity:
                 add_global_response_headers(request, self.remember(request, identity['uid'], identity['signed_request']))
 
+        if not identity.get('uid'):
+            identity = self._get_identity_from_code(request)
         return identity
 
     def login_view(self, request, redir_url, scope):
@@ -120,12 +122,36 @@ class FacebookAuthHelper(object):
         sig, payload = signed_request.split(u'.', 1)
         sig = self.base64_url_decode(sig)
         return sig == self.sign(payload)
+    def _make_graph_call(self, path, params={}):
+        try:
+            string_params = urllib.urlencode(params)
+            return json.load(urllib.urlopen("https://graph.facebook.com"+path, string_params))
+        except:
+            return None
 
+    def _get_identity_from_code(self, request):
+        """Check for ?code=<code> param in
+        url and exchange it for an access_token.
+        Then get user from access_token.
+        """
+        identity = {'uid':None, 'access_token':None}
+        code = self._key_from_request(request, "code") #TODO, make 'code' a config'd key
+        if code:
+            params = {
+                "code": code,
+                "client_id": self.app_id,
+                "redirect_uri": request.path_url,
+                "client_secret": self.app_secret
+            }
+            response = self._make_graph_call("/oauth/access_token", params)
+            if 'access_token' in response:
+                return self.get_identity_via_access_token(response['access_token'])
+        return identity
     def get_identity_via_access_token(self, access_token):
         identity = {'uid':None, 'access_token':None}
         if not access_token: return identity
         try:
-            userdat = json.load(urllib.urlopen('https://graph.facebook.com/me?access_token='+access_token))
+            userdat = self._make_graph_call("/me", {"access_token": access_token})
         except:
             return identity
         user = dict([(key, userdat.get(key)) for key in ['username', 'first_name', 'last_name', 'verified', 'name', 'locale', 'updated_time', 'languages', 'link', 'location', 'gender', 'timezone', 'id']])
