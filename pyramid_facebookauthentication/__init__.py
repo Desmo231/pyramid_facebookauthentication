@@ -220,8 +220,8 @@ class FacebookAuthHelper(object):
         identity = {'uid':None, 'access_token':None}
         if not access_token: return identity
         try:
-        except:
             userdat = self._make_graph_call("/me", {"method": "GET", "access_token": access_token})
+        except:
             return identity
         user = dict([(key, userdat.get(key)) for key in ['username', 'first_name', 'last_name', 'verified', 'name', 'locale', 'updated_time', 'languages', 'link', 'location', 'gender', 'timezone', 'id']])
         user['signed_request'] = self.make_signed_request(access_token,user)
