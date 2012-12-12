@@ -1,6 +1,12 @@
 # package
 
-import base64, hashlib, hmac, json, urllib, urlparse, time
+import base64
+import hashlib
+import hmac
+import json
+import time
+import urllib
+import urlparse
 
 from zope.interface import implements
 from pyramid.interfaces import IAuthenticationPolicy, IDebugLogger
@@ -12,9 +18,11 @@ from pyramid.security import (
     Everyone,
     )
 
+
 class FacebookAuthenticationPolicy(CallbackAuthenticationPolicy):
     """ An object representing Facebook Pyramid authentication policy. """
     implements(IAuthenticationPolicy)
+
     def __init__(self, app_id, app_secret, app_url, app_permissions='user_about_me', callback=None):
         self.fbuser = FacebookAuthHelper(app_id, app_secret, app_url, app_permissions, callback)
         self.callback = callback
@@ -38,7 +46,6 @@ class FacebookAuthenticationPolicy(CallbackAuthenticationPolicy):
         return self.fbuser.login_view(request, redir_url, scope)
 
 
-
 class FacebookAuthHelper(object):
 
     def __init__(self, app_id, app_secret, app_url, app_permissions='user_about_me', callback=None):
@@ -50,9 +57,10 @@ class FacebookAuthHelper(object):
         self.debug = False
 
     def identify(self, request):
-        identity = {'uid':None, 'access_token':None}
+        identity = {'uid': None, 'access_token': None}
         sr = self._key_from_request(request, 'signed_request')
-        if sr: # Get the user from a signed_request
+        if sr:
+            # Get the user from a signed_request
             if not self.check_signed_request(sr):
                 return None
             user = self.get_user_from_signed_request(sr)
@@ -96,7 +104,8 @@ class FacebookAuthHelper(object):
         return None
 
     def remember(self, request, uid, signed_request=None):
-        if not signed_request: return []
+        if not signed_request:
+            return []
         return [
             ('P3P', 'CP="HONK"'),
             ('Set-Cookie', 'signed_request="{0}"; Path=/'.format(signed_request))
@@ -168,7 +177,8 @@ class FacebookAuthHelper(object):
 
     def get_user_from_cookie(self, cookies):
         cookie = cookies.get("fbs_" + self.app_id, "")
-        if not cookie: return None
+        if not cookie:
+            return None
         args = dict((k, v[-1]) for k, v in urlparse.parse_qs(cookie.strip('"')).items())
         payload = "".join(k + "=" + args[k] for k in sorted(args.keys())
                       if k != "sig")
@@ -191,10 +201,11 @@ class FacebookAuthHelper(object):
         sig, payload = signed_request.split(u'.', 1)
         sig = self.base64_url_decode(sig)
         return sig == self.sign(payload)
+
     def _make_graph_call(self, path, params={}):
         try:
             string_params = urllib.urlencode(params)
-            return json.load(urllib.urlopen("https://graph.facebook.com"+path, string_params))
+            return json.load(urllib.urlopen("https://graph.facebook.com" + path, string_params))
         except:
             return None
 
@@ -203,8 +214,9 @@ class FacebookAuthHelper(object):
         url and exchange it for an access_token.
         Then get user from access_token.
         """
-        identity = {'uid':None, 'access_token':None}
-        code = self._key_from_request(request, "code") #TODO, make 'code' a config'd key
+        identity = {'uid': None, 'access_token': None}
+        #TODO, make 'code' a config'd key
+        code = self._key_from_request(request, "code")
         if code:
             params = {
                 "code": code,
@@ -216,15 +228,17 @@ class FacebookAuthHelper(object):
             if 'access_token' in response:
                 return self.get_identity_via_access_token(response['access_token'])
         return identity
+
     def get_identity_via_access_token(self, access_token):
-        identity = {'uid':None, 'access_token':None}
-        if not access_token: return identity
+        identity = {'uid': None, 'access_token': None}
+        if not access_token:
+            return identity
         try:
             userdat = self._make_graph_call("/me", {"method": "GET", "access_token": access_token})
         except:
             return identity
         user = dict([(key, userdat.get(key)) for key in ['username', 'first_name', 'last_name', 'verified', 'name', 'locale', 'updated_time', 'languages', 'link', 'location', 'gender', 'timezone', 'id']])
-        user['signed_request'] = self.make_signed_request(access_token,user)
+        user['signed_request'] = self.make_signed_request(access_token, user)
         user['access_token'] = access_token
         user['uid'] = user.get('id')
         return user
@@ -240,12 +254,11 @@ class FacebookAuthHelper(object):
 
     def make_signed_request(self, access_token, user):
         # {"country":"us","locale":"en_US","age":{"min":21}},
-        payload = {"algorithm":"HMAC-SHA256", "expires":0,
-          "issued_at":int(time.time()),
-          "oauth_token":access_token,
-          "user_id":user['id'],
+        payload = {"algorithm": "HMAC-SHA256", "expires": 0,
+          "issued_at": int(time.time()),
+          "oauth_token": access_token,
+          "user_id": user['id'],
           "user": user}
         data = base64.urlsafe_b64encode(json.dumps(payload))
         sig = base64.urlsafe_b64encode(self.sign(data))
         return sig + "." + data
-
